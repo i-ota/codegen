@@ -16,7 +16,8 @@ limitations under the License.
 
 import { BaseVisitor, Context, Kind } from "@apexlang/core/model";
 import { Import } from "@apexlang/codegen/go";
-import { WrapperFuncsVisitor } from "./wrappers_visitor.js";
+import { WrappersVisitor } from "./wrappers_visitor.js";
+import { RegisterVisitor } from "./register_visitor.js";
 
 export class ExportVisitor extends BaseVisitor {
   visitNamespace(context: Context): void {
@@ -44,8 +45,11 @@ export class ExportVisitor extends BaseVisitor {
     }
     this.write(`)\n\n`);
 
-    const wrapperFuncs = new WrapperFuncsVisitor(this.writer);
-    context.namespace.accept(context, wrapperFuncs);
+    const registerVisitor = new RegisterVisitor(this.writer);
+    context.namespace.accept(context, registerVisitor);
+
+    const wrappersVisitor = new WrappersVisitor(this.writer);
+    context.namespace.accept(context, wrappersVisitor);
   }
 }
 

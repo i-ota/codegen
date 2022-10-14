@@ -10,7 +10,8 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./tinygo": "./dist/tinygo/index.js"
   },
   "files": [
     "templates",
@@ -20,7 +21,9 @@
     "src",
     "docs",
     "definitions",
-    "templates"
+    "templates",
+    "*.js",
+    "*.d.ts"
   ],
   "sideEffects": false,
   "scripts": {
@@ -39,7 +42,7 @@
     "prerelease": "npm run build"
   },
   "dependencies": {
-    "@apexlang/core": "file:../../apexlang/apex-js",
+    "@apexlang/core": "0.1.1",
     "@apexlang/codegen": "file:../../apexlang/codegen"
   },
   "devDependencies": {

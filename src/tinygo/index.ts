@@ -16,7 +16,10 @@ limitations under the License.
 
 export * from "./constants";
 export * from "./export_visitor";
+export * from "./import_visitor";
 export * from "./imports_visitor";
 export * from "./interface_visitor";
 export * from "./interfaces_visitor";
+export * from "./register_visitor";
 export * from "./wrappers_visitor";
+export * from "./utilities";

@@ -24,62 +24,76 @@ import {
 } from "@apexlang/core/model";
 import {
   expandType,
-  Import,
-  mapParams,
   returnShare,
   translateAlias,
   msgpackRead,
   msgpackVarAccessParam,
   setExpandStreamPattern,
+  methodName,
 } from "@apexlang/codegen/go";
 import {
   capitalize,
+  isHandler,
   isObject,
   isVoid,
+  noCode,
   uncapitalize,
 } from "@apexlang/codegen/utils";
 import { primitiveTransformers } from "./constants";
 
-export class WrapperVarsVisitor extends BaseVisitor {
-  visitFunction(context: Context): void {
-    const tr = translateAlias(context);
-    const { operation } = context;
-    this.write(
-      `\tvar ${uncapitalize(operation.name)}Handler func (${mapParams(
-        context,
-        operation.parameters
-      )}) `
-    );
-    if (!isVoid(operation.type)) {
-      this.write(`(${expandType(operation.type, undefined, true, tr)}, error)`);
-    } else {
-      this.write(`error`);
-    }
-    this.write(`\n`);
-  }
-
-  visitAllOperationsAfter(context: Context): void {
-    if (context.config.handlerPreamble == true) {
-      this.write(`)\n\n`);
-      delete context.config.handlerPreamble;
-    }
-    super.triggerAllOperationsAfter(context);
-  }
-}
-
-export class WrapperFuncsVisitor extends BaseVisitor {
-  private aliases: { [key: string]: Import } = {};
-
+export class WrappersVisitor extends BaseVisitor {
   visitContextBefore(context: Context): void {
-    this.aliases = (context.config.aliases as { [key: string]: Import }) || {};
     setExpandStreamPattern("flux.Flux[{{type}}]");
   }
 
+  visitOperation(context: Context): void {
+    if (!isHandler(context) || noCode(context.operation)) {
+      return;
+    }
+    this.doHandler(context);
+  }
+
   visitFunction(context: Context): void {
+    this.doRegister(context);
+    this.doHandler(context);
+  }
+
+  doRegister(context: Context): void {
     const tr = translateAlias(context);
     const { namespace: ns, operation } = context;
     const handlerName = `${capitalize(operation.name)}Fn`;
     const wrapperName = `${uncapitalize(operation.name)}Wrapper`;
+    let rxStyle = "RequestResponse";
+    const streams = operation.parameters
+      .filter((p) => p.type.kind == Kind.Stream)
+      .map((p) => (p.type as Stream).type);
+    const streamIn = streams.length > 0 ? streams[0] : undefined;
+
+    if (streams.length > 1) {
+      throw new Error(
+        `There can only be zero or one stream parameter. Found ${streams.length}.`
+      );
+    }
+    if (streamIn || operation.type.kind == Kind.Stream) {
+      rxStyle = streamIn ? "RequestChannel" : "RequestStream";
+    }
+
+    this.write(
+      `func Register${capitalize(operation.name)}(handler ${handlerName}) {
+      invoke.Export${rxStyle}("${ns.name}", "${
+        operation.name
+      }", ${wrapperName}(handler))
+    }\n\n`
+    );
+  }
+
+  doHandler(context: Context): void {
+    const tr = translateAlias(context);
+    const { namespace: ns, interface: iface, operation } = context;
+    const handlerName = `${capitalize(operation.name)}Fn`;
+    const wrapperName = iface
+      ? `${uncapitalize(iface.name)}${capitalize(operation.name)}Wrapper`
+      : `${uncapitalize(operation.name)}Wrapper`;
     let rxStyle = "RequestResponse";
     let rxWrapper = "mono.Mono";
     let rxArgs = `p payload.Payload`;
@@ -119,17 +133,19 @@ export class WrapperFuncsVisitor extends BaseVisitor {
       }
     }
 
-    this.write(
-      `func Register${capitalize(operation.name)}(handler ${handlerName}) {
-      invoke.Register${rxStyle}Handler("${ns.name}", "${
-        operation.name
-      }", ${wrapperName}(handler))
-    }\n\n`
-    );
-    this.write(
-      `func ${wrapperName}(handler ${handlerName}) invoke.${rxStyle}Handler {
-        return func(ctx context.Context, ${rxArgs}) ${rxWrapper}[payload.Payload] {\n`
-    );
+    var handlerMethodName = "handler";
+    if (iface) {
+      this.write(
+        `func ${wrapperName}(svc ${iface.name}) invoke.${rxStyle}Handler {
+          return func(ctx context.Context, ${rxArgs}) ${rxWrapper}[payload.Payload] {\n`
+      );
+      handlerMethodName = `svc.${methodName(operation, operation.name)}`;
+    } else {
+      this.write(
+        `func ${wrapperName}(handler ${handlerName}) invoke.${rxStyle}Handler {
+          return func(ctx context.Context, ${rxArgs}) ${rxWrapper}[payload.Payload] {\n`
+      );
+    }
     if (operation.isUnary() && parameters.length > 0) {
       const unaryParam = parameters[0];
       if (unaryParam.type.kind == Kind.Enum) {
@@ -188,19 +204,22 @@ export class WrapperFuncsVisitor extends BaseVisitor {
         }\n`);
       }
       this.write(
-        `response := handler(ctx, ${returnShare(
+        `response := ${handlerMethodName}(ctx, ${returnShare(
           unaryParam.type
         )}request${rxHandlerIn})\n`
       );
     } else {
       if (parameters.length > 0) {
-        this.write(`var inputArgs ${capitalize(operation.name)}Args
+        const argsName = iface
+          ? `${uncapitalize(iface.name)}${capitalize(operation.name)}Args`
+          : `${uncapitalize(operation.name)}Args`;
+        this.write(`var inputArgs ${argsName}
         if err := transform.CodecDecode(p, &inputArgs); err != nil {
           return ${rxPackage}.Error[payload.Payload](err)
         }\n`);
       }
       this.write(
-        `response := handler(${msgpackVarAccessParam(
+        `response := ${handlerMethodName}(${msgpackVarAccessParam(
           "inputArgs",
           parameters
         )}${rxHandlerIn})\n`
