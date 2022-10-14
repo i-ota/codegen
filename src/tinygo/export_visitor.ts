@@ -18,6 +18,7 @@ import { BaseVisitor, Context, Kind } from "@apexlang/core/model";
 import { Import } from "@apexlang/codegen/go";
 import { WrappersVisitor } from "./wrappers_visitor.js";
 import { RegisterVisitor } from "./register_visitor.js";
+import { isHandler } from "@apexlang/codegen/utils";
 
 export class ExportVisitor extends BaseVisitor {
   visitNamespace(context: Context): void {
@@ -61,6 +62,9 @@ class ImportsVisitor extends BaseVisitor {
   }
 
   visitOperation(context: Context): void {
+    if (!isHandler(context)) {
+      return;
+    }
     const { operation } = context;
     if (operation.type.kind == Kind.Stream) {
       this.imports.add("github.com/WasmRS/wasmrs-go/rx/flux");
@@ -70,6 +74,9 @@ class ImportsVisitor extends BaseVisitor {
   }
 
   visitParameter(context: Context): void {
+    if (!isHandler(context)) {
+      return;
+    }
     const { parameter } = context;
     if (parameter.type.kind == Kind.Stream) {
       this.imports.add("github.com/WasmRS/wasmrs-go/rx/flux");

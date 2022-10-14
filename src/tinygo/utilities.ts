@@ -10,9 +10,14 @@ export interface OperationParts {
   type: string;
   unaryIn?: Parameter;
   parameters: Parameter[];
-  streamIn?: AnyType;
+  streamIn?: StreamParam;
   returns: AnyType;
   returnPackage: string;
+}
+
+export interface StreamParam {
+  parameter: Parameter;
+  type: AnyType;
 }
 
 export function getOperationParts(operation: Operation): OperationParts {
@@ -22,7 +27,12 @@ export function getOperationParts(operation: Operation): OperationParts {
   );
   const streams = operation.parameters
     .filter((p) => p.type.kind == Kind.Stream)
-    .map((p) => (p.type as Stream).type);
+    .map((p) => {
+      return {
+        parameter: p,
+        type: (p.type as Stream).type,
+      } as StreamParam;
+    });
   const streamIn = streams.length > 0 ? streams[0] : undefined;
 
   if (streams.length > 1) {

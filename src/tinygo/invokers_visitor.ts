@@ -22,6 +22,8 @@ import {
   Primitive,
   Enum,
   Alias,
+  Union,
+  Named,
 } from "@apexlang/core/model";
 import {
   expandType,
@@ -174,9 +176,44 @@ export class InvokersVisitor extends BaseVisitor {
       if ok {
         binary.BigEndian.PutUint32(metadata[4:8], stream.StreamID())
       }
-      p := payload.New(payloadData, metadata[:])
-      m := gCaller.${type}(ctx, p)\n`
+      p := payload.New(payloadData, metadata[:])\n`
     );
+    if (streamIn) {
+      var transformFn = "";
+      switch (streamIn.type.kind) {
+        case Kind.Primitive:
+          const p = streamIn.type as Primitive;
+          transformFn = `transform.${capitalize(p.name)}.Encode`;
+          break;
+        case Kind.Alias:
+          const a = streamIn.type as Alias;
+          if (a.type.kind == Kind.Primitive) {
+            const p = a.type as Primitive;
+            transformFn = `transform.${capitalize(p.name)}Decode[${a.name}]`;
+          } else {
+            const expanded = expandType(a.type, undefined, undefined, tr);
+            transformFn = `func(value ${a.name}) (payload.Payload, error) {
+                return transform.CodecEncode((*${expanded})(&value))
+              }`;
+          }
+          break;
+        case Kind.Enum:
+          const e = streamIn.type as Enum;
+          transformFn = `transform.Int32Encode[${e.name}]`;
+          break;
+        case Kind.Type:
+        case Kind.Union:
+          const t = streamIn.type as Named;
+          transformFn = `transform.MsgPackEncode[${t.name}]`;
+          break;
+        default:
+          console.log(streamIn.type.kind);
+      }
+      const inMap = `flux.Map(${streamIn.parameter.name}, ${transformFn})`;
+      this.write(`m := gCaller.${type}(ctx, p, ${inMap})\n`);
+    } else {
+      this.write(`m := gCaller.${type}(ctx, p)\n`);
+    }
     if (isVoid(returns)) {
       this.write(`return mono.Map(m, transform.Void.Decode)\n`);
     } else if (returns.kind == Kind.Alias) {
@@ -184,23 +221,25 @@ export class InvokersVisitor extends BaseVisitor {
       if (a.type.kind == Kind.Primitive) {
         const p = a.type as Primitive;
         this.write(
-          `return mono.Map(m, transform.${capitalize(p.name)}Decode[${
-            a.name
-          }])\n`
+          `return ${returnPackage}.Map(m, transform.${capitalize(
+            p.name
+          )}Decode[${a.name}])\n`
         );
       } else {
         const expanded = expandType(a.type, undefined, undefined, tr);
         this.write(
-          `return mono.Map(m, func(raw payload.Payload) (${a.name}, error) {
-            var val ${expanded}
-            err := transform.CodecDecode(raw, &val)
-            return ${a.name}(val), err
+          `return ${returnPackage}.Map(m, func(raw payload.Payload) (${a.name}, error) {
+            var val ${a.name}
+            err := transform.CodecDecode(raw, (*${expanded})(&val))
+            return val, err
           })\n`
         );
       }
     } else if (returns.kind == Kind.Enum) {
       const e = returns as Enum;
-      this.write(`return mono.Map(m, transform.Int32Decode[${e.name}])\n`);
+      this.write(
+        `return ${returnPackage}.Map(m, transform.Int32Decode[${e.name}])\n`
+      );
     } else if (isPrimitive(returns)) {
       const p = returns as Primitive;
       const transform = primitiveTransformers.get(p.name);

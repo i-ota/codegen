@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 import { InterfacesVisitor as GoInterfacesVisitor } from "@apexlang/codegen/go";
-import { Visitor, Writer } from "@apexlang/core/model";
+import { Context, Visitor, Writer } from "@apexlang/core/model";
 import { ImportsVisitor } from "./imports_visitor";
 import { InterfaceVisitor } from "./interface_visitor";
 
@@ -28,5 +28,9 @@ export class InterfacesVisitor extends GoInterfacesVisitor {
       new InterfaceVisitor(writer);
     this.dependencyVisitor = (writer: Writer): Visitor =>
       new InterfaceVisitor(writer);
+  }
+
+  visitContextBefore(context: Context): void {
+    context.config.noEnumJSON = true;
   }
 }
