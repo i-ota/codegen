@@ -189,7 +189,7 @@ export class InvokersVisitor extends BaseVisitor {
           const a = streamIn.type as Alias;
           if (a.type.kind == Kind.Primitive) {
             const p = a.type as Primitive;
-            transformFn = `transform.${capitalize(p.name)}Decode[${a.name}]`;
+            transformFn = `transform.${capitalize(p.name)}Encode[${a.name}]`;
           } else {
             const expanded = expandType(a.type, undefined, undefined, tr);
             transformFn = `func(value ${a.name}) (payload.Payload, error) {
@@ -228,9 +228,8 @@ export class InvokersVisitor extends BaseVisitor {
       } else {
         const expanded = expandType(a.type, undefined, undefined, tr);
         this.write(
-          `return ${returnPackage}.Map(m, func(raw payload.Payload) (${a.name}, error) {
-            var val ${a.name}
-            err := transform.CodecDecode(raw, (*${expanded})(&val))
+          `return ${returnPackage}.Map(m, func(raw payload.Payload) (val ${a.name}, err error) {
+            err = transform.CodecDecode(raw, (*${expanded})(&val))
             return val, err
           })\n`
         );

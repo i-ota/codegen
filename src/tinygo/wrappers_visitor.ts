@@ -21,6 +21,7 @@ import {
   Primitive,
   Stream,
   Alias,
+  Enum,
 } from "@apexlang/core/model";
 import {
   expandType,
@@ -35,6 +36,7 @@ import {
   capitalize,
   isHandler,
   isObject,
+  isPrimitive,
   isVoid,
   noCode,
   uncapitalize,
@@ -118,18 +120,40 @@ export class WrappersVisitor extends BaseVisitor {
     }
     if (streamIn) {
       rxArgs += `, in flux.Flux[payload.Payload]`;
-      if (streamIn.kind == Kind.Primitive) {
-        const prim = streamIn as Primitive;
-        rxHandlerIn = `, flux.Map(in, ${primitiveTransformers.get(
-          prim.name
-        )}.Decode)`;
-      } else {
-        rxHandlerIn = `, flux.Map(in, transform.MsgPackDecode[${expandType(
-          streamIn,
-          undefined,
-          false,
-          tr
-        )}])`;
+      switch (streamIn.kind) {
+        case Kind.Primitive:
+          const prim = streamIn as Primitive;
+          rxHandlerIn = `, flux.Map(in, ${primitiveTransformers.get(
+            prim.name
+          )}.Decode)`;
+          break;
+        case Kind.Enum:
+          const e = streamIn as Enum;
+          rxHandlerIn = `, flux.Map(in, transform.Int32Decode[${e.name}])`;
+          break;
+        case Kind.Alias:
+          const a = streamIn as Alias;
+          if (a.type.kind == Kind.Primitive) {
+            const p = a.type as Primitive;
+            rxHandlerIn = `, flux.Map(in, transform.${capitalize(
+              p.name
+            )}Decode[${a.name}])`;
+          } else {
+            const expanded = expandType(a.type, undefined, undefined, tr);
+            rxHandlerIn = `, flux.Map(in, func(raw payload.Payload) (val ${a.name}, err error) {
+              err = transform.CodecDecode(raw, (*${expanded})(&val))
+              return val, err
+            })`;
+          }
+          break;
+        default:
+          rxHandlerIn = `, flux.Map(in, transform.MsgPackDecode[${expandType(
+            streamIn,
+            undefined,
+            false,
+            tr
+          )}])`;
+          break;
       }
     }
 
@@ -239,7 +263,25 @@ export class WrappersVisitor extends BaseVisitor {
           prim.name
         )}.Encode)`
       );
-    } else {
+    } else if (returnType.kind == Kind.Alias) {
+      const a = returnType as Alias;
+      let transformFn = `transform.${capitalize(a.name)}.Encode`;
+      if (a.type.kind == Kind.Primitive) {
+        const p = a.type as Primitive;
+        transformFn = `transform.${capitalize(p.name)}Encode[${a.name}]`;
+      } else {
+        const expanded = expandType(a.type, undefined, undefined, tr);
+        transformFn = `func(value ${a.name}) (payload.Payload, error) {
+            return transform.CodecEncode((*${expanded})(&value))
+          }`;
+      }
+      this.write(`return ${rxPackage}.Map(response, ${transformFn})`);
+    } else if (returnType.kind == Kind.Enum) {
+      const e = returnType as Enum;
+      this.write(
+        `return ${rxPackage}.Map(response, transform.Int32Encode[${e.name}])`
+      );
+    } else if (isObject(returnType)) {
       this.visitWrapperBeforeReturn(context);
       this.write(
         `return ${rxPackage}.Map(response, transform.MsgPackEncode[${expandType(
