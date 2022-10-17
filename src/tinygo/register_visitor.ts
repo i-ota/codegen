@@ -14,32 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import {
-  Context,
-  BaseVisitor,
-  Kind,
-  Primitive,
-  Stream,
-  Alias,
-} from "@apexlang/core/model";
-import {
-  expandType,
-  returnShare,
-  translateAlias,
-  msgpackRead,
-  msgpackVarAccessParam,
-  setExpandStreamPattern,
-  methodName,
-} from "@apexlang/codegen/go";
+import { Context, BaseVisitor, Kind, Stream } from "@apexlang/core/model";
+import { setExpandStreamPattern } from "@apexlang/codegen/go";
 import {
   capitalize,
   isHandler,
-  isObject,
-  isVoid,
   noCode,
   uncapitalize,
 } from "@apexlang/codegen/utils";
-import { primitiveTransformers } from "./constants";
 
 export class RegisterVisitor extends BaseVisitor {
   visitContextBefore(context: Context): void {

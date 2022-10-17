@@ -36,9 +36,10 @@ import {
   capitalize,
   isHandler,
   isObject,
-  isPrimitive,
+  isProvider,
   isVoid,
   noCode,
+  operationArgsType,
   uncapitalize,
 } from "@apexlang/codegen/utils";
 import { primitiveTransformers } from "./constants";
@@ -56,6 +57,9 @@ export class WrappersVisitor extends BaseVisitor {
   }
 
   visitFunction(context: Context): void {
+    if (isProvider(context)) {
+      return;
+    }
     this.doRegister(context);
     this.doHandler(context);
   }
@@ -234,9 +238,7 @@ export class WrappersVisitor extends BaseVisitor {
       );
     } else {
       if (parameters.length > 0) {
-        const argsName = iface
-          ? `${uncapitalize(iface.name)}${capitalize(operation.name)}Args`
-          : `${uncapitalize(operation.name)}Args`;
+        const argsName = operationArgsType(iface, operation);
         this.write(`var inputArgs ${argsName}
         if err := transform.CodecDecode(p, &inputArgs); err != nil {
           return ${rxPackage}.Error[payload.Payload](err)

@@ -18,7 +18,7 @@ import { BaseVisitor, Context, Kind } from "@apexlang/core/model";
 import { Import } from "@apexlang/codegen/go";
 import { WrappersVisitor } from "./wrappers_visitor.js";
 import { RegisterVisitor } from "./register_visitor.js";
-import { isHandler } from "@apexlang/codegen/utils";
+import { isHandler, isProvider } from "@apexlang/codegen/utils";
 
 export class ExportVisitor extends BaseVisitor {
   visitNamespace(context: Context): void {
@@ -58,6 +58,9 @@ class ImportsVisitor extends BaseVisitor {
   imports: Set<string> = new Set();
 
   visitFunction(context: Context): void {
+    if (isProvider(context)) {
+      return;
+    }
     this.visitOperation(context);
   }
 

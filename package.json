@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@apexlang/core": "0.1.1",
-    "@apexlang/codegen": "file:../../apexlang/codegen"
+    "@apexlang/codegen": "0.0.15"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.22.0",

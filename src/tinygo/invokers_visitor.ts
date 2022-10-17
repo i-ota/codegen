@@ -22,7 +22,6 @@ import {
   Primitive,
   Enum,
   Alias,
-  Union,
   Named,
 } from "@apexlang/core/model";
 import {
@@ -38,7 +37,7 @@ import {
   isObject,
   isPrimitive,
   isVoid,
-  uncapitalize,
+  operationArgsType,
 } from "@apexlang/codegen/utils";
 import { getOperationParts } from "./utilities";
 import { primitiveTransformers } from "./constants";
@@ -79,15 +78,22 @@ export class InvokersVisitor extends BaseVisitor {
     const tr = translateAlias(context);
     const { namespace: ns, interface: iface, operation } = context;
 
-    const structName = iface ? iface.name + "Impl" : "Client";
-    const receiver = structName.substring(0, 1).toLowerCase();
+    let receiver = "";
+    if (iface) {
+      const structName = iface.name + "Impl";
+      receiver = structName.substring(0, 1).toLowerCase();
+      this.write(
+        `func (${receiver} *${structName}) ${methodName(
+          operation,
+          operation.name
+        )}(ctx context.Context`
+      );
+    } else {
+      this.write(
+        `func ${methodName(operation, operation.name)}(ctx context.Context`
+      );
+    }
 
-    this.write(
-      `func (${receiver} *${structName})${methodName(
-        operation,
-        operation.name
-      )}(ctx context.Context`
-    );
     operation.parameters.forEach((p) =>
       this.visitParam(context.clone({ parameter: p }))
     );
@@ -147,10 +153,7 @@ export class InvokersVisitor extends BaseVisitor {
       }
     } else {
       if (parameters.length > 0) {
-        const argsName = iface
-          ? `${uncapitalize(iface.name)}${capitalize(operation.name)}Args`
-          : `${uncapitalize(operation.name)}Args`;
-
+        const argsName = operationArgsType(iface, operation);
         this.write(`request := ${argsName} {\n`);
         parameters.forEach((p) => {
           this.write(
@@ -166,13 +169,13 @@ export class InvokersVisitor extends BaseVisitor {
         this.write(`payloadData := []byte{}\n`);
       }
     }
+    const opVar = iface
+      ? `${receiver}.op${methodName(operation, operation.name)}`
+      : `_op${methodName(operation, operation.name)}`;
     this.write(
       `var metadata [8]byte
       stream, ok := proxy.FromContext(ctx)
-      binary.BigEndian.PutUint32(metadata[0:4], ${receiver}.op${methodName(
-        operation,
-        operation.name
-      )})
+      binary.BigEndian.PutUint32(metadata[0:4], ${opVar})
       if ok {
         binary.BigEndian.PutUint32(metadata[4:8], stream.StreamID())
       }
