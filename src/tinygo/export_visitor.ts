@@ -14,11 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { BaseVisitor, Context, Kind } from "@apexlang/core/model";
+import {
+  Alias,
+  AnyType,
+  BaseVisitor,
+  Context,
+  Kind,
+  List,
+  Map,
+  Optional,
+  Stream,
+} from "@apexlang/core/model";
 import { Import } from "@apexlang/codegen/go";
 import { WrappersVisitor } from "./wrappers_visitor.js";
 import { RegisterVisitor } from "./register_visitor.js";
-import { isHandler, isProvider } from "@apexlang/codegen/utils";
+import { isProvider } from "@apexlang/codegen/utils";
 
 export class ExportVisitor extends BaseVisitor {
   visitNamespace(context: Context): void {
@@ -38,12 +48,6 @@ export class ExportVisitor extends BaseVisitor {
       "github.com/WasmRS/wasmrs-go/payload"\n`);
     sortedImports.forEach((i) => this.write(`"${i}"\n`));
     this.write(`"github.com/WasmRS/wasmrs-go/transform"\n`);
-    const aliases = (context.config.aliases as { [key: string]: Import }) || {};
-    for (let a of Object.values(aliases)) {
-      if (a.import) {
-        this.write(`\t"${a.import}"\n`);
-      }
-    }
     this.write(`)\n\n`);
 
     const registerVisitor = new RegisterVisitor(this.writer);
@@ -65,24 +69,57 @@ class ImportsVisitor extends BaseVisitor {
   }
 
   visitOperation(context: Context): void {
-    if (!isHandler(context)) {
+    if (!isProvider(context)) {
       return;
     }
     const { operation } = context;
-    if (operation.type.kind == Kind.Stream) {
-      this.imports.add("github.com/WasmRS/wasmrs-go/rx/flux");
-    } else {
+    if (operation.type.kind != Kind.Stream) {
       this.imports.add("github.com/WasmRS/wasmrs-go/rx/mono");
     }
+    this.visitCheckType(context, operation.type);
   }
 
   visitParameter(context: Context): void {
-    if (!isHandler(context)) {
+    if (!isProvider(context)) {
       return;
     }
-    const { parameter } = context;
-    if (parameter.type.kind == Kind.Stream) {
-      this.imports.add("github.com/WasmRS/wasmrs-go/rx/flux");
+    const { operation, parameter } = context;
+    if (operation.unary) {
+      this.visitCheckType(context, parameter.type);
+    }
+  }
+
+  visitCheckType(context: Context, t: AnyType): void {
+    switch (t.kind) {
+      case Kind.Alias:
+        const a = t as Alias;
+        const aliases =
+          (context.config.aliases as { [key: string]: Import }) || {};
+        const t2 = aliases[a.name];
+        if (t2 && t2.import) {
+          this.imports.add(t2.import);
+        } else {
+          this.visitCheckType(context, a.type);
+        }
+        break;
+      case Kind.Stream:
+        this.imports.add("github.com/WasmRS/wasmrs-go/rx/flux");
+        const s = t as Stream;
+        this.visitCheckType(context, s.type);
+        break;
+      case Kind.Optional:
+        const o = t as Optional;
+        this.visitCheckType(context, o.type);
+        break;
+      case Kind.List:
+        const l = t as List;
+        this.visitCheckType(context, l.type);
+        break;
+      case Kind.Map:
+        const m = t as Map;
+        this.visitCheckType(context, m.keyType);
+        this.visitCheckType(context, m.valueType);
+        break;
     }
   }
 }
