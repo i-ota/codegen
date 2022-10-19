@@ -28,7 +28,7 @@ import {
 import { Import } from "@apexlang/codegen/go";
 import { WrappersVisitor } from "./wrappers_visitor.js";
 import { RegisterVisitor } from "./register_visitor.js";
-import { isProvider } from "@apexlang/codegen/utils";
+import { isHandler } from "@apexlang/codegen/utils";
 
 export class ExportVisitor extends BaseVisitor {
   visitNamespace(context: Context): void {
@@ -62,14 +62,15 @@ class ImportsVisitor extends BaseVisitor {
   imports: Set<string> = new Set();
 
   visitFunction(context: Context): void {
-    if (isProvider(context)) {
-      return;
+    const { operation } = context;
+    if (operation.type.kind != Kind.Stream) {
+      this.imports.add("github.com/WasmRS/wasmrs-go/rx/mono");
     }
-    this.visitOperation(context);
+    this.visitCheckType(context, operation.type);
   }
 
   visitOperation(context: Context): void {
-    if (!isProvider(context)) {
+    if (!isHandler(context)) {
       return;
     }
     const { operation } = context;
@@ -80,7 +81,7 @@ class ImportsVisitor extends BaseVisitor {
   }
 
   visitParameter(context: Context): void {
-    if (!isProvider(context)) {
+    if (!isHandler(context)) {
       return;
     }
     const { operation, parameter } = context;

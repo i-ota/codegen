@@ -42,8 +42,8 @@
     "prerelease": "npm run build"
   },
   "dependencies": {
-    "@apexlang/core": "0.1.1",
-    "@apexlang/codegen": "0.0.15"
+    "@apexlang/core": "^0.1.1",
+    "@apexlang/codegen": "^0.0.16"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.22.0",
