@@ -54,7 +54,7 @@ export class ImportVisitor extends BaseVisitor {
       }
       if (
         iface.operations.find((o) => {
-          return o.annotation("nocode") == undefined;
+          return o.annotation("nocode") != undefined;
         }) == undefined
       ) {
         hasProviders = true;
@@ -200,7 +200,7 @@ class ImportsVisitor extends BaseVisitor {
       return;
     }
     const { operation, parameter } = context;
-    if (operation.unary) {
+    if (!operation.unary) {
       this.visitCheckType(context, parameter.type);
     }
   }
